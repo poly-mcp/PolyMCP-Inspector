@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "polymcp-inspector"
+version = "0.1.0"
+description = "Standalone MCP Inspector for tools, resources, prompts, UI preview, and LLM orchestration"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.110.0",
+  "uvicorn>=0.30.0",
+  "requests>=2.31.0",
+  "httpx>=0.27.0"
+]
+
+[project.scripts]
+polymcp-inspector = "polymcp_inspector.__main__:main"
+
+[tool.setuptools]
+packages = ["polymcp_inspector"]
+
+[tool.setuptools.package-data]
+polymcp_inspector = ["static/*.html"]
