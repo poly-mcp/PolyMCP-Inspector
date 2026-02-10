@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/1",
+  "build": {
+    "beforeBuildCommand": "",
+    "beforeDevCommand": "",
+    "devPath": "../src",
+    "distDir": "../src"
+  },
+  "package": {
+    "productName": "PolyMCP Inspector",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "open": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "targets": ["msi", "nsis"],
+      "identifier": "io.polymcp.inspector",
+      "externalBin": ["bin/polymcp-inspector-backend"],
+      "resources": [
+        "bin/static/index.html",
+        "bin/static/icon.png"
+      ],
+      "icon": [
+        "icons/icon.ico",
+        "icons/icon.png"
+      ]
+    },
+    "windows": [
+      {
+        "title": "PolyMCP Inspector",
+        "width": 1600,
+        "height": 980,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}
