@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PolyMCP Inspector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Stack+Sans+Notch:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/feather-icons"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #ffffff;
+      --bg-secondary: #fafafa;
+      --border: #e5e5e5;
+      --text: #000000;
+      --text-secondary: #666666;
+      --text-muted: #999999;
+      --accent: #000000;
+      --accent-dark: #202020;
+      --ok: #22c55e;
+      --err: #dc2626;
+    }
+    body {
+      font-family: 'Stack Sans Notch', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      overflow: hidden;
+    }
+    .app { display: grid; grid-template-columns: auto 1fr; height: 100vh; }
+
+    .sidebar {
+      width: 240px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      transition: width 0.2s;
+    }
+    .sidebar.collapsed { width: 60px; }
+    .sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 57px;
+    }
+    .logo { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; }
+    .sidebar.collapsed .logo { width: 28px; overflow: hidden; }
+    .collapse-btn {
+      width: 28px; height: 28px; border: 1px solid var(--border); background: transparent; border-radius: 4px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); flex-shrink: 0;
+    }
+    .collapse-btn:hover { background: var(--bg); color: var(--text); }
+    .sidebar.collapsed .collapse-btn { margin-left: auto; margin-right: auto; }
+
+    .nav-section { padding: 8px; border-bottom: 1px solid var(--border); }
+    .nav-item {
+      display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 6px; cursor: pointer;
+      color: var(--text-secondary); font-size: 13px; font-weight: 500; transition: all 0.15s; white-space: nowrap;
+    }
+    .nav-item:hover { background: var(--bg); color: var(--text); }
+    .nav-item.active { background: var(--text); color: var(--bg); }
+    .nav-icon { flex-shrink: 0; width: 18px; height: 18px; }
+    .sidebar.collapsed .nav-item { justify-content: center; padding: 8px; }
+    .sidebar.collapsed .nav-item span { display: none; }
+    .nav-spacer { flex: 1; }
+
+    .main { display: flex; flex-direction: column; background: var(--bg); min-height: 0; }
+
+    .tabs-bar {
+      display: flex; align-items: center; gap: 2px; background: var(--bg-secondary); border-bottom: 1px solid var(--border);
+      padding: 4px 8px; overflow-x: auto;
+    }
+    .tab {
+      display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: transparent;
+      border: 1px solid transparent; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 13px;
+      color: var(--text-secondary); white-space: nowrap; transition: all 0.15s; position: relative;
+    }
+    .tab:hover { background: var(--bg); color: var(--text); }
+    .tab.active { background: var(--bg); color: var(--text); border-color: var(--border); border-bottom-color: transparent; }
+    .tab-close {
+      width: 16px; height: 16px; border: none; background: transparent; cursor: pointer;
+      color: var(--text-muted); padding: 0; display: flex; align-items: center; justify-content: center; opacity: 0;
+    }
+    .tab:hover .tab-close, .tab.active .tab-close { opacity: 1; }
+    .tab-close:hover { color: var(--text); }
+    .new-tab-btn {
+      width: 32px; height: 32px; border: 1px solid var(--border); background: transparent; border-radius: 6px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); margin-left: 8px;
+    }
+    .new-tab-btn:hover { background: var(--bg); color: var(--text); }
+
+    .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; height: 100%; min-height: 0; }
+    .content.chat-mode { display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+
+    .chat-container {
+      height: 100%; min-height: 0; overflow: hidden; padding: 24px 20px 12px 20px; display: flex; flex-direction: column;
+      max-width: 900px; margin: 0 auto; width: 100%;
+    }
+    .chat-header { margin-bottom: 24px; flex-shrink: 0; }
+    .chat-title { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+    .chat-subtitle { font-size: 14px; color: var(--text-secondary); }
+
+    .messages { flex: 1; display: flex; flex-direction: column; gap: 16px; padding-right: 8px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+    .message { display: flex; gap: 12px; }
+    .message-avatar {
+      width: 32px; height: 32px; border-radius: 50%; background: var(--bg-secondary); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .message-content { flex: 1; }
+    .message-author { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+    .message-text { font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+    .message.assistant .message-avatar { background: var(--text); color: var(--bg); }
+    .assistant-avatar-img {
+      width: 23px;
+      height: 23px;
+      display: block;
+      object-fit: contain;
+    }
+
+    .tool-response { margin-top: 12px; padding: 16px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; }
+    .tool-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 12px; color: var(--text-secondary); }
+    .tool-name { font-family: 'Courier New', monospace; font-weight: 600; }
+    .tool-result { font-size: 13px; font-family: 'Courier New', monospace; line-height: 1.5; white-space: pre-wrap; }
+    .ui-preview { margin-top: 16px; }
+
+    .input-area { flex-shrink: 0; border-top: 1px solid var(--border); padding: 16px 20px 20px 20px; background: var(--bg); }
+    .compose-wrapper { max-width: 900px; margin: 0 auto; width: 100%; }
+    .compose-header { display: flex; gap: 16px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+    .compose-section { display: flex; align-items: center; gap: 8px; }
+    .compose-label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+    .compose-select { display: flex; gap: 4px; flex-wrap: wrap; }
+    .compose-option {
+      padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; cursor: pointer;
+      transition: all 0.15s; background: var(--bg); white-space: nowrap; color: var(--text-secondary);
+    }
+    .compose-option:hover { background: var(--bg-secondary); color: var(--text); }
+    .compose-option.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .compose-option .server-status { display: inline-block; width: 5px; height: 5px; background: var(--ok); border-radius: 50%; margin-right: 4px; }
+
+    .input-wrapper {
+      display: flex; gap: 12px; align-items: flex-end; border: 1px solid var(--border); border-radius: 12px;
+      padding: 12px 12px 12px 16px; background: var(--bg); transition: border-color 0.15s;
+    }
+    .input-wrapper:focus-within { border-color: var(--accent); }
+    .input-box {
+      flex: 1; border: none; font-size: 14px; font-family: inherit; resize: none; min-height: 24px;
+      max-height: 200px; outline: none; line-height: 1.5; background: transparent;
+    }
+    .input-box::placeholder { color: var(--text-muted); }
+    .send-btn {
+      width: 32px; height: 32px; background: var(--accent); color: #fff; border: none; border-radius: 50%; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0;
+    }
+    .send-btn:hover { background: var(--accent-dark); }
+    .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .tools-view { display: grid; grid-template-columns: 1fr 2fr; height: 100%; }
+    .tools-list { border-right: 1px solid var(--border); padding: 20px; overflow-y: auto; }
+    .tool-item {
+      padding: 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; cursor: pointer; transition: all 0.15s;
+    }
+    .tool-item:hover { border-color: var(--accent); }
+    .tool-item.active { background: var(--bg-secondary); border-color: var(--accent); }
+    .tool-item-name { font-weight: 600; font-size: 13px; margin-bottom: 4px; font-family: 'Courier New', monospace; }
+    .tool-item-desc { font-size: 12px; color: var(--text-secondary); }
+    .tool-preview { padding: 20px; overflow-y: auto; }
+    .preview-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; font-family: 'Courier New', monospace; }
+    .preview-desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 24px; }
+    .param-group { margin-bottom: 20px; }
+    .param-label { font-size: 13px; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+    .param-required { font-size: 10px; padding: 2px 6px; background: var(--text); color: var(--bg); border-radius: 3px; font-weight: 600; }
+    .param-input, .param-textarea, .param-select {
+      width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; outline: none;
+    }
+    .param-textarea { min-height: 96px; resize: vertical; font-family: 'Courier New', monospace; }
+    .param-input:focus, .param-textarea:focus, .param-select:focus { border-color: var(--accent); }
+    .execute-btn {
+      padding: 10px 20px; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 13px;
+      font-weight: 600; cursor: pointer;
+    }
+    .execute-btn:hover { background: var(--accent-dark); }
+    .execute-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    .panel {
+      border: 1px solid var(--border); border-radius: 8px; padding: 14px; background: #fff; margin-bottom: 12px;
+    }
+    .panel-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+    .muted { color: var(--text-secondary); }
+    .mono { font-family: 'Courier New', monospace; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .stack { display: flex; flex-direction: column; gap: 8px; }
+    .btn {
+      padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer;
+      color: var(--text-secondary);
+    }
+    .btn:hover { border-color: var(--accent); color: var(--text); }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn.primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+    .badge { padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); font-size: 11px; }
+    .badge.ok { color: var(--ok); border-color: #bbf7d0; background: #f0fdf4; }
+    .badge.err { color: var(--err); border-color: #fecaca; background: #fef2f2; }
+    .empty { color: var(--text-secondary); padding: 10px 0; }
+    .split-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .iframe { width: 100%; min-height: 420px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+    .pre { white-space: pre-wrap; word-break: break-word; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #ccc; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">PolyMCP Inspector</div>
+        <button class="collapse-btn" id="collapseBtn"><i data-feather="sidebar" style="width:16px;height:16px"></i></button>
+      </div>
+      <div class="nav-section">
+        <div class="nav-item active" data-view="chat"><i data-feather="message-square" class="nav-icon"></i><span>Chat</span></div>
+        <div class="nav-item" data-view="tools"><i data-feather="tool" class="nav-icon"></i><span>Tools</span></div>
+        <div class="nav-item" data-view="resources"><i data-feather="database" class="nav-icon"></i><span>Resources</span></div>
+        <div class="nav-item" data-view="prompts"><i data-feather="terminal" class="nav-icon"></i><span>Prompts</span></div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-item" data-view="servers"><i data-feather="server" class="nav-icon"></i><span>MCP Servers</span></div>
+        <div class="nav-item" data-view="monitoring"><i data-feather="activity" class="nav-icon"></i><span>Monitoring</span></div>
+      </div>
+      <div class="nav-spacer"></div>
+      <div class="nav-section">
+        <div class="nav-item" data-view="settings"><i data-feather="settings" class="nav-icon"></i><span>Settings</span></div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="tabs-bar" id="tabsBar"></div>
+      <div class="content" id="content"></div>
+    </div>
+  </div>
+
+  <script>
+    const INSPECTOR_STATE_KEY = 'polymcp_inspector_state_v1';
+    const INSPECTOR_DB_NAME = 'polymcp_inspector_db';
+    const INSPECTOR_DB_STORE = 'state_store';
+    const INSPECTOR_DB_KEY = 'workspace_state';
+    const MODELS_CACHE_TTL_MS = 15000;
+    const state = {
+      servers: [],
+      views: ['chat','tools','resources','prompts','servers','monitoring','settings'],
+      activeView: 'chat',
+      tabs: [],
+      activeTabId: null,
+      modelsCache: {}
+    };
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const keyFromUrl = urlParams.get('api_key');
+    if (keyFromUrl) localStorage.setItem('polymcp_inspector_api_key', keyFromUrl);
+    const openaiKeyFromUrl = urlParams.get('openai_api_key');
+    if (openaiKeyFromUrl) localStorage.setItem('polymcp_inspector_openai_api_key', openaiKeyFromUrl);
+    const anthropicKeyFromUrl = urlParams.get('anthropic_api_key') || urlParams.get('claude_api_key');
+    if (anthropicKeyFromUrl) localStorage.setItem('polymcp_inspector_anthropic_api_key', anthropicKeyFromUrl);
+
+    function getInspectorApiKey() {
+      return localStorage.getItem('polymcp_inspector_api_key') || '';
+    }
+
+    function getOpenAiApiKey() {
+      return localStorage.getItem('polymcp_inspector_openai_api_key') || '';
+    }
+
+    function getAnthropicApiKey() {
+      return localStorage.getItem('polymcp_inspector_anthropic_api_key') || '';
+    }
+
+    function fetchJson(url, init = {}) {
+      const headers = { ...(init.headers || {}) };
+      const isApiCall = (url.startsWith('/api/') || url.startsWith(window.location.origin + '/api/'));
+      if (isApiCall) {
+        const inspectorApiKey = getInspectorApiKey();
+        const openaiApiKey = getOpenAiApiKey();
+        const anthropicApiKey = getAnthropicApiKey();
+        if (inspectorApiKey) headers['X-Inspector-API-Key'] = inspectorApiKey;
+        if (openaiApiKey) headers['X-OpenAI-API-Key'] = openaiApiKey;
+        if (anthropicApiKey) headers['X-Anthropic-API-Key'] = anthropicApiKey;
+      }
+      return fetch(url, { ...init, headers }).then(async (r) => {
+        const txt = await r.text();
+        let data = {};
+        try { data = txt ? JSON.parse(txt) : {}; } catch { data = { status: 'error', error: txt }; }
+        if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+        return data;
+      });
+    }
+
+    function activeTab() {
+      return state.tabs.find(t => t.id === state.activeTabId);
+    }
+
+    function getActiveView() {
+      const tab = activeTab();
+      if (tab && state.views.includes(tab.activeView)) return tab.activeView;
+      if (state.views.includes(state.activeView)) return state.activeView;
+      return 'chat';
+    }
+
+    function serializeState() {
+      return {
+        activeView: getActiveView(),
+        activeTabId: state.activeTabId,
+        tabs: (state.tabs || []).map((tab) => ({
+          ...tab,
+          messages: (tab.messages || []).slice(-120).map((m) => ({
+            role: m.role,
+            text: String(m.text || '').slice(0, 12000),
+            toolTrace: m.toolTrace || null,
+            uiHtml: String(m.uiHtml || '').slice(0, 200000),
+            uiSnapshot: String(m.uiSnapshot || '').slice(0, 200000),
+          }))
+        }))
+      };
+    }
+
+    function openInspectorDb() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(INSPECTOR_DB_NAME, 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(INSPECTOR_DB_STORE)) {
+            db.createObjectStore(INSPECTOR_DB_STORE);
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function idbSetState(payload) {
+      const db = await openInspectorDb();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(INSPECTOR_DB_STORE, 'readwrite');
+        tx.objectStore(INSPECTOR_DB_STORE).put(payload, INSPECTOR_DB_KEY);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    }
+
+    async function idbGetState() {
+      const db = await openInspectorDb();
+      const result = await new Promise((resolve, reject) => {
+        const tx = db.transaction(INSPECTOR_DB_STORE, 'readonly');
+        const req = tx.objectStore(INSPECTOR_DB_STORE).get(INSPECTOR_DB_KEY);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      });
+      db.close();
+      return result;
+    }
+
+    function saveState() {
+      let snapshot = serializeState();
+      let payload = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          payload = JSON.stringify(snapshot);
+          localStorage.setItem(INSPECTOR_STATE_KEY, payload);
+          sessionStorage.setItem(INSPECTOR_STATE_KEY, payload);
+          break;
+        } catch {
+          state.tabs.forEach((t) => { t.messages = (t.messages || []).slice(-60); });
+          snapshot = serializeState();
+        }
+      }
+      // Best-effort long-term persistence.
+      idbSetState(snapshot).catch(() => {});
+    }
+
+    async function restoreState() {
+      let parsed = null;
+      try {
+        parsed = await idbGetState();
+      } catch {}
+      if (!parsed) {
+        const raw = localStorage.getItem(INSPECTOR_STATE_KEY) || sessionStorage.getItem(INSPECTOR_STATE_KEY);
+        if (raw) {
+          try { parsed = JSON.parse(raw); } catch {}
+        }
+      }
+      try {
+        if (!parsed || !Array.isArray(parsed.tabs) || !parsed.tabs.length) return false;
+        state.tabs = parsed.tabs.map((tab, idx) => ({
+          ...createTab(tab.name || `Project ${idx + 1}`),
+          ...tab,
+              messages: Array.isArray(tab.messages) && tab.messages.length
+                ? tab.messages.map((m) => ({
+                    role: m.role || 'assistant',
+                    text: m.text || '',
+                    toolTrace: m.toolTrace || null,
+                    uiHtml: m.uiHtml || '',
+                    uiSnapshot: m.uiSnapshot || ''
+                  }))
+                : [{ role: 'assistant', text: 'Hello! Connect/select MCP server(s), choose provider, then ask your request.' }],
+          uiResources: Array.isArray(tab.uiResources) ? tab.uiResources : [],
+          selectedServerIds: Array.isArray(tab.selectedServerIds) ? tab.selectedServerIds : [],
+          activeView: state.views.includes(tab.activeView) ? tab.activeView : (parsed.activeView || 'chat'),
+        }));
+        state.activeTabId = parsed.activeTabId || parsed.tabs[0].id;
+        state.activeView = parsed.activeView || 'chat';
+        if (!state.tabs.some(t => t.id === state.activeTabId)) {
+          state.activeTabId = state.tabs[0].id;
+        }
+        const currentTab = activeTab();
+        if (currentTab && state.views.includes(currentTab.activeView)) {
+          state.activeView = currentTab.activeView;
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    function restoreStateSyncFallback() {
+      const raw = localStorage.getItem(INSPECTOR_STATE_KEY) || sessionStorage.getItem(INSPECTOR_STATE_KEY);
+      if (!raw) return false;
+      try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || !Array.isArray(parsed.tabs) || !parsed.tabs.length) return false;
+        state.tabs = parsed.tabs.map((tab, idx) => ({
+          ...createTab(tab.name || `Project ${idx + 1}`),
+          ...tab,
+          messages: Array.isArray(tab.messages) && tab.messages.length
+            ? tab.messages.map((m) => ({ role: m.role || 'assistant', text: m.text || '', toolTrace: m.toolTrace || null, uiHtml: m.uiHtml || '', uiSnapshot: m.uiSnapshot || '' }))
+            : [{ role: 'assistant', text: 'Hello! Connect/select MCP server(s), choose provider, then ask your request.' }],
+          activeView: state.views.includes(tab.activeView) ? tab.activeView : (parsed.activeView || 'chat'),
+        }));
+        state.activeTabId = parsed.activeTabId || parsed.tabs[0].id;
+        state.activeView = parsed.activeView || 'chat';
+        const currentTab = activeTab();
+        if (currentTab && state.views.includes(currentTab.activeView)) {
+          state.activeView = currentTab.activeView;
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    // Fast-path recovery before async init.
+    restoreStateSyncFallback();
+
+    function createTab(name) {
+      const nextNum = state.tabs.length + 1;
+      return {
+        id: `tab_${Date.now()}_${Math.random().toString(16).slice(2, 7)}`,
+        name: name || `Project ${nextNum}`,
+        provider: 'ollama',
+        model: '',
+        selectedServerIds: [],
+        messages: [{ role: 'assistant', text: 'Hello! Connect/select MCP server(s), choose provider, then ask your request.' }],
+        autoScroll: true,
+        input: '',
+        selectedTool: null,
+        tools: [],
+        resources: [],
+        selectedResource: null,
+        resourceContent: null,
+        prompts: [],
+        selectedPrompt: null,
+        promptArgs: {},
+        promptResult: null,
+        activeView: 'chat',
+        uiServerId: '',
+        uiResources: [],
+        uiSelectedResource: '',
+        uiHtml: '',
+        uiError: '',
+      };
+    }
+
+    function renderTabs() {
+      const tabsBar = document.getElementById('tabsBar');
+      tabsBar.innerHTML = '';
+      state.tabs.forEach(tab => {
+        const el = document.createElement('div');
+        el.className = `tab ${tab.id === state.activeTabId ? 'active' : ''}`;
+        el.dataset.tab = tab.id;
+        el.innerHTML = `<span>${tab.name}</span><button class="tab-close" title="Close"><i data-feather="x" style="width:12px;height:12px"></i></button>`;
+        el.addEventListener('click', (e) => {
+          if (e.target.closest('.tab-close')) return;
+          state.activeTabId = tab.id;
+          state.activeView = state.views.includes(tab.activeView) ? tab.activeView : 'chat';
+          saveState();
+          render();
+        });
+        el.querySelector('.tab-close').addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (state.tabs.length <= 1) return;
+          state.tabs = state.tabs.filter(t => t.id !== tab.id);
+          if (state.activeTabId === tab.id) state.activeTabId = state.tabs[0].id;
+          const currentTab = activeTab();
+          state.activeView = (currentTab && state.views.includes(currentTab.activeView)) ? currentTab.activeView : 'chat';
+          saveState();
+          render();
+        });
+        tabsBar.appendChild(el);
+      });
+
+      const addBtn = document.createElement('button');
+      addBtn.className = 'new-tab-btn';
+      addBtn.id = 'newTabBtn';
+      addBtn.innerHTML = '<i data-feather="plus" style="width:16px;height:16px"></i>';
+      addBtn.addEventListener('click', () => {
+        const tab = createTab();
+        tab.selectedServerIds = state.servers.length ? [state.servers[0].id] : [];
+        state.tabs.push(tab);
+        state.activeTabId = tab.id;
+        saveState();
+        render();
+      });
+      tabsBar.appendChild(addBtn);
+    }
+
+    function renderNav() {
+      const activeView = getActiveView();
+      document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.view === activeView);
+      });
+    }
+
+    function setView(view) {
+      const tab = activeTab();
+      if (tab) tab.activeView = view;
+      state.activeView = view;
+      saveState();
+      render();
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function renderMarkdown(input) {
+      const src = String(input || '');
+      if (window.marked && typeof window.marked.parse === 'function') {
+        const raw = window.marked.parse(src, { breaks: true, gfm: true });
+        return raw.replace(/<script[\s\S]*?<\/script>/gi, '');
+      }
+      const text = escapeHtml(src)
+        .replace(/^### (.*)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.*)$/gm, '<h2>$1</h2>')
+        .replace(/^# (.*)$/gm, '<h1>$1</h1>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\n/g, '<br>');
+      return text;
+    }
+
+    function getProviderBackendId(provider) {
+      if (provider === 'anthropic') return 'anthropic';
+      if (provider === 'openai') return 'openai';
+      if (provider === 'ollama') return 'ollama';
+      return null;
+    }
+
+    function getCachedModels(provider) {
+      const entry = state.modelsCache[provider];
+      if (!entry || !Array.isArray(entry.models)) return [];
+      return entry.models;
+    }
+
+    function setCachedModels(provider, models) {
+      const clean = Array.isArray(models) ? models.filter(m => typeof m === 'string' && m.trim()) : [];
+      state.modelsCache[provider] = {
+        models: [...new Set(clean)],
+        fetchedAt: Date.now()
+      };
+      return state.modelsCache[provider].models;
+    }
+
+    function isModelsCacheFresh(provider) {
+      const entry = state.modelsCache[provider];
+      if (!entry || !Array.isArray(entry.models) || !entry.models.length) return false;
+      if (typeof entry.fetchedAt !== 'number') return false;
+      return (Date.now() - entry.fetchedAt) < MODELS_CACHE_TTL_MS;
+    }
+
+    async function ensureModels(provider, options = {}) {
+      const force = !!options.force;
+      if (!force && isModelsCacheFresh(provider)) return getCachedModels(provider);
+      const backendId = getProviderBackendId(provider);
+      if (!backendId) return [];
+      const data = await fetchJson(`/api/llm/${backendId}/models`);
+      return setCachedModels(provider, data.models || []);
+    }
+
+    async function getFirstModel(provider) {
+      const models = await ensureModels(provider, { force: true });
+      if (!models.length) throw new Error(`No models available for ${provider}`);
+      return models[0];
+    }
+
+    function decodeBase64ToUtf8(input) {
+      try {
+        return decodeURIComponent(escape(atob(input)));
+      } catch {
+        return atob(input || '');
+      }
+    }
+
+    function injectInspectorBridge(html, serverId) {
+      if (!html || !serverId) return html || '';
+      const bridge = `<script>
+(function() {
+  const __SERVER_ID__ = ${JSON.stringify(serverId)};
+  const __API_KEY__ = ${JSON.stringify(getInspectorApiKey())};
+  const __origFetch__ = window.fetch.bind(window);
+  function __json(payload, status) {
+    return new Response(JSON.stringify(payload), { status: status || 200, headers: { 'Content-Type': 'application/json' } });
+  }
+  function __parseBody(body) {
+    if (!body) return {};
+    if (typeof body === 'string') { try { return JSON.parse(body); } catch { return {}; } }
+    return body;
+  }
+  window.fetch = async function(input, init) {
+    const req = init || {};
+    const headers = { ...(req.headers || {}) };
+    if (__API_KEY__) headers['X-Inspector-API-Key'] = __API_KEY__;
+    const url = typeof input === 'string' ? input : ((input && input.url) ? input.url : '');
+    if (url.startsWith('/tools/')) {
+      const tool = decodeURIComponent(url.slice('/tools/'.length).split('?')[0]);
+      const params = __parseBody(req.body);
+      const res = await __origFetch__(\`/api/servers/\${encodeURIComponent(__SERVER_ID__)}/tools/\${encodeURIComponent(tool)}/execute\`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify(params || {})
+      });
+      const payload = await res.json();
+      return __json(payload.result !== undefined ? payload.result : payload, res.status);
+    }
+    if (url === '/list_tools') {
+      const res = await __origFetch__(\`/api/servers/\${encodeURIComponent(__SERVER_ID__)}/tools\`, { headers });
+      const payload = await res.json();
+      return __json({ tools: payload.tools || [] }, res.status);
+    }
+    if (url === '/list_resources') {
+      const res = await __origFetch__(\`/api/servers/\${encodeURIComponent(__SERVER_ID__)}/resources\`, { headers });
+      const payload = await res.json();
+      return __json({ resources: payload.resources || [] }, res.status);
+    }
+    return __origFetch__(input, { ...req, headers });
+  };
+})();
+<\/script>`;
+      if (html.includes('<head>')) return html.replace('<head>', '<head>' + bridge);
+      if (html.includes('<body>')) return html.replace('<body>', '<body>' + bridge);
+      return bridge + html;
+    }
+
+    async function loadTabUiResource(tab, force = false) {
+      const serverId = tab.selectedServerIds[0] || state.servers[0]?.id || '';
+      if (!serverId) {
+        tab.uiServerId = '';
+        tab.uiResources = [];
+        tab.uiSelectedResource = '';
+        tab.uiHtml = '';
+        tab.uiError = 'No server selected.';
+        return;
+      }
+      if (!force && tab.uiServerId === serverId && tab.uiHtml) return;
+      tab.uiServerId = serverId;
+      tab.uiError = '';
+      try {
+        const listData = await fetchJson(`/api/servers/${encodeURIComponent(serverId)}/resources`);
+        const resources = listData.resources || [];
+        tab.uiResources = resources;
+        if (!resources.length) {
+          tab.uiSelectedResource = '';
+          tab.uiHtml = '';
+          tab.uiError = 'No UI resource found on this server.';
+          return;
+        }
+        const preferred = resources.find(r => (r.mimeType || '').toLowerCase().includes('html'))
+          || resources.find(r => (r.uri || '').toLowerCase().includes('.html'))
+          || resources[0];
+        if (!tab.uiSelectedResource || !resources.some(r => r.uri === tab.uiSelectedResource)) {
+          tab.uiSelectedResource = preferred.uri;
+        }
+        const readData = await fetchJson(`/api/servers/${encodeURIComponent(serverId)}/resources/read`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uri: tab.uiSelectedResource })
+        });
+        const contents = readData.contents || [];
+        const htmlItem = contents.find(c => ((c.mimeType || c.mime_type || '').toLowerCase().includes('text/html')));
+        if (!htmlItem) {
+          tab.uiHtml = '';
+          tab.uiError = 'Selected resource is not HTML.';
+          return;
+        }
+        const rawHtml = typeof htmlItem.text === 'string' ? htmlItem.text : decodeBase64ToUtf8(htmlItem.blob || '');
+        tab.uiHtml = injectInspectorBridge(rawHtml, serverId);
+        tab.uiError = '';
+      } catch (err) {
+        tab.uiHtml = '';
+        tab.uiError = err.message || String(err);
+      }
+    }
+
+    function buildToolResponseBlock(stepData) {
+      return `
+        <div class="tool-response">
+          <div class="tool-header"><i data-feather="activity" style="width:12px;height:12px"></i><span>Tool trace</span></div>
+          <div class="tool-result">${escapeHtml(JSON.stringify(stepData, null, 2))}</div>
+        </div>
+      `;
+    }
+
+    function freezeHtmlForHistory(html) {
+      if (!html) return '';
+      return String(html).replace(/<script[\s\S]*?<\/script>/gi, '');
+    }
+
+    async function renderChat() {
+      const tab = activeTab();
+      const content = document.getElementById('content');
+      if (!tab) return;
+      let models = getCachedModels(tab.provider);
+      let modelLoadError = tab.modelLoadError || '';
+      if (!tab.model || (models.length && !models.includes(tab.model))) tab.model = models[0] || '';
+
+      const serverOptions = state.servers.map(s => {
+        const active = tab.selectedServerIds.includes(s.id) ? 'active' : '';
+        return `<div class="compose-option ${active}" data-server="${escapeHtml(s.id)}"><span class="server-status"></span>${escapeHtml(s.name || s.id)}</div>`;
+      }).join('');
+
+      const providers = [
+        ['anthropic', 'Claude'],
+        ['openai', 'GPT-4'],
+        ['ollama', 'Ollama']
+      ].map(([id, label]) => `<div class="compose-option ${tab.provider === id ? 'active' : ''}" data-provider="${id}">${label}</div>`).join('');
+      const modelOptions = (models || []).map(m => `<option value="${escapeHtml(m)}" ${tab.model === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('');
+
+      const lastAssistantUiIndex = (() => {
+        for (let i = tab.messages.length - 1; i >= 0; i--) {
+          if (tab.messages[i].role === 'assistant' && tab.messages[i].uiHtml) return i;
+        }
+        return -1;
+      })();
+
+      const msgs = tab.messages.map((m, idx) => {
+        const isUser = m.role === 'user';
+        const avatar = isUser
+          ? '<i data-feather="user" style="width:16px;height:16px"></i>'
+          : '<img class="assistant-avatar-img" src="/icon.png?v=2" alt="AI">';
+        const author = isUser ? 'You' : 'Assistant';
+        const block = m.toolTrace ? buildToolResponseBlock(m.toolTrace) : '';
+        const uiBlock = m.uiHtml ? `<div class="tool-response"><div class="tool-header"><i data-feather="layout" style="width:12px;height:12px"></i><span>MCP App UI</span>${idx !== lastAssistantUiIndex ? '<span class="badge">snapshot</span>' : ''}</div><div id="msg-ui-${idx}"></div></div>` : '';
+        return `
+          <div class="message ${isUser ? 'user' : 'assistant'}">
+            <div class="message-avatar">${avatar}</div>
+            <div class="message-content">
+              <div class="message-author">${author}</div>
+              <div class="message-text">${renderMarkdown(m.text)}</div>
+              ${block}
+              ${uiBlock}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      content.innerHTML = `
+        <div class="chat-container">
+          <div class="chat-header">
+            <div class="row" style="justify-content:space-between; align-items:flex-end;">
+              <div class="chat-title">Chat Playground</div>
+              <button class="btn" id="clearChatBtn">Clear Chat</button>
+            </div>
+            <div class="chat-subtitle">Each tab is an independent playground with its own provider, servers, and conversation.</div>
+          </div>
+          <div class="messages" id="messages">${msgs}</div>
+        </div>
+        <div class="input-area">
+          <div class="compose-wrapper">
+            <div class="compose-box">
+              <div class="compose-header">
+                <div class="compose-section">
+                  <div class="compose-label">Provider:</div>
+                  <div class="compose-select" id="providerSelect">${providers}</div>
+                </div>
+                <div class="compose-section">
+                  <div class="compose-label">Model:</div>
+                  <select class="param-select" id="modelSelect" style="min-width:220px;">
+                    ${modelOptions || '<option value="">No models</option>'}
+                  </select>
+                  <button class="btn" id="refreshModelsBtn">Refresh</button>
+                </div>
+                <div class="compose-section">
+                  <div class="compose-label">MCP:</div>
+                  <div class="compose-select" id="serverSelect">${serverOptions || '<div class="compose-option">No servers</div>'}</div>
+                </div>
+              </div>
+              ${modelLoadError ? `<div class="badge err" style="margin-bottom:8px;">${escapeHtml(modelLoadError)}</div>` : ''}
+              <div class="input-wrapper">
+                <textarea class="input-box" id="messageInput" placeholder="Ask me anything..." rows="1">${escapeHtml(tab.input || '')}</textarea>
+                <button class="send-btn" id="sendBtn"><i data-feather="send" style="width:16px;height:16px"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const input = document.getElementById('messageInput');
+      const sendBtn = document.getElementById('sendBtn');
+      sendBtn.disabled = !input.value.trim();
+      const clearChatBtn = document.getElementById('clearChatBtn');
+      clearChatBtn.addEventListener('click', () => {
+        tab.messages = [{ role: 'assistant', text: 'Chat cleared. Ready for a new test.' }];
+        tab.autoScroll = true;
+        saveState();
+        renderChat();
+      });
+
+      input.addEventListener('input', function() {
+        tab.input = this.value;
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+        sendBtn.disabled = !this.value.trim();
+        saveState();
+      });
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          runChat();
+        }
+      });
+      sendBtn.addEventListener('click', runChat);
+
+      document.querySelectorAll('#providerSelect .compose-option').forEach(option => {
+        option.addEventListener('click', () => {
+          tab.provider = option.dataset.provider;
+          tab.model = '';
+          saveState();
+          renderChat();
+        });
+      });
+
+      document.getElementById('refreshModelsBtn').addEventListener('click', async () => {
+        delete state.modelsCache[tab.provider];
+        tab.model = '';
+        saveState();
+        await renderChat();
+      });
+
+      document.getElementById('modelSelect').addEventListener('change', (e) => {
+        tab.model = e.target.value;
+        saveState();
+      });
+
+      document.querySelectorAll('#serverSelect .compose-option[data-server]').forEach(option => {
+        option.addEventListener('click', () => {
+          const id = option.dataset.server;
+          const idx = tab.selectedServerIds.indexOf(id);
+          if (idx >= 0) tab.selectedServerIds.splice(idx, 1);
+          else tab.selectedServerIds.push(id);
+          tab.uiServerId = '';
+          saveState();
+          renderChat();
+        });
+      });
+
+      tab.messages.forEach((m, idx) => {
+        if (!m.uiHtml) return;
+        const host = document.getElementById(`msg-ui-${idx}`);
+        if (!host) return;
+        const frame = document.createElement('iframe');
+        frame.className = 'iframe';
+        const isLive = idx === lastAssistantUiIndex;
+        frame.setAttribute('sandbox', isLive ? 'allow-scripts allow-same-origin' : 'allow-same-origin');
+        frame.srcdoc = isLive ? m.uiHtml : (m.uiSnapshot || freezeHtmlForHistory(m.uiHtml));
+        if (isLive) {
+          frame.addEventListener('load', () => {
+            const capture = (delayMs) => {
+              setTimeout(() => {
+                try {
+                  const doc = frame.contentDocument;
+                  if (!doc || !doc.documentElement) return;
+                  const snapshot = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+                  if (snapshot && snapshot.length > 100) {
+                    m.uiSnapshot = freezeHtmlForHistory(snapshot);
+                    saveState();
+                  }
+                } catch {}
+              }, delayMs);
+            };
+            // Capture after initial load and after data hydration.
+            capture(400);
+            capture(1600);
+            capture(3200);
+          }, { once: true });
+        }
+        host.appendChild(frame);
+      });
+
+      // Background refresh for models/UI to avoid blocking first render.
+      setTimeout(async () => {
+        let changed = false;
+        try {
+          const fetched = await ensureModels(tab.provider, { force: true });
+          if (fetched && fetched.length) {
+            if (JSON.stringify(fetched) !== JSON.stringify(models)) changed = true;
+            if (!tab.model || !fetched.includes(tab.model)) {
+              tab.model = fetched[0] || '';
+              changed = true;
+            }
+            tab.modelLoadError = '';
+          }
+        } catch (err) {
+          tab.modelLoadError = err.message || String(err);
+          changed = true;
+        }
+        const prevUi = tab.uiHtml || '';
+        await loadTabUiResource(tab);
+        if (tab.uiHtml !== prevUi) changed = true;
+        if (changed) renderChat();
+      }, 0);
+
+      async function runChat() {
+        const text = input.value.trim();
+        if (!text) return;
+        tab.messages.push({ role: 'user', text });
+        tab.autoScroll = true;
+        tab.input = '';
+        saveState();
+        renderChat();
+
+        if (!tab.selectedServerIds.length) {
+          tab.messages.push({ role: 'assistant', text: 'Select at least one MCP server first.' });
+          renderChat();
+          return;
+        }
+
+        try {
+          const provider = tab.provider;
+          const currentModels = await ensureModels(provider, { force: true });
+          const model = (tab.model && currentModels.includes(tab.model)) ? tab.model : (currentModels[0] || '');
+          if (!model) throw new Error('Select a model first');
+          tab.model = model;
+          const backendProvider = getProviderBackendId(provider);
+          if (!backendProvider) {
+            throw new Error(`${provider} is not supported by backend yet`);
+          }
+          const results = [];
+          for (const serverId of tab.selectedServerIds) {
+            const data = await fetchJson(`/api/servers/${encodeURIComponent(serverId)}/llm/chat`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ provider: backendProvider, model, prompt: text, max_steps: 6 })
+            });
+            results.push({ serverId, data });
+          }
+
+          const mergedText = results.map(r => {
+            const answer = r.data.final_answer || r.data.error || JSON.stringify(r.data);
+            return `[${r.serverId}]\n${answer}`;
+          }).join('\n\n');
+
+          const mergedSteps = results.flatMap(r => (r.data.steps || []).map(s => ({ server: r.serverId, ...s })));
+          const usedTools = results.some(r => r.data && r.data.used_tools === true);
+          if (usedTools) {
+            await loadTabUiResource(tab, true);
+          } else {
+            tab.uiHtml = '';
+          }
+          tab.messages.push({
+            role: 'assistant',
+            text: mergedText,
+            toolTrace: mergedSteps,
+            uiHtml: usedTools ? (tab.uiHtml || '') : '',
+            uiSnapshot: ''
+          });
+          tab.autoScroll = true;
+          saveState();
+        } catch (err) {
+          tab.messages.push({ role: 'assistant', text: `Request failed: ${err.message}` });
+          tab.autoScroll = true;
+          saveState();
+        }
+        await renderChat();
+      }
+
+      feather.replace();
+      const messages = document.getElementById('messages');
+      if (tab.autoScroll) {
+        messages.scrollTop = messages.scrollHeight;
+        tab.autoScroll = false;
+      }
+      saveState();
+    }
+
+    async function ensureToolsLoaded(tab) {
+      const sid = tab.selectedServerIds[0] || state.servers[0]?.id;
+      if (!sid) return;
+      tab.selectedServerIds = [sid, ...tab.selectedServerIds.filter(x => x !== sid)];
+      tab.tools = (await fetchJson(`/api/servers/${encodeURIComponent(sid)}/tools`)).tools || [];
+      if (!tab.selectedTool && tab.tools.length) tab.selectedTool = tab.tools[0];
+    }
+
+    async function renderTools() {
+      const tab = activeTab();
+      const content = document.getElementById('content');
+      if (!tab) return;
+      await ensureToolsLoaded(tab);
+      const sid = tab.selectedServerIds[0] || '';
+
+      const toolList = (tab.tools || []).map(t => `
+        <div class="tool-item ${tab.selectedTool?.name === t.name ? 'active' : ''}" data-tool="${escapeHtml(t.name)}">
+          <div class="tool-item-name">${escapeHtml(t.name)}</div>
+          <div class="tool-item-desc">${escapeHtml(t.description || 'No description')}</div>
+        </div>
+      `).join('');
+
+      const selected = tab.selectedTool;
+      let paramsHtml = '<div class="empty">Select a tool.</div>';
+      if (selected) {
+        const schema = selected.inputSchema || selected.input_schema || {};
+        const props = schema.properties || {};
+        const req = schema.required || [];
+        const fields = Object.entries(props).map(([k,v]) => `
+          <div class="param-group">
+            <label class="param-label">${escapeHtml(k)} ${req.includes(k) ? '<span class="param-required">REQUIRED</span>' : ''}</label>
+            <input class="param-input" data-param="${escapeHtml(k)}" placeholder="${escapeHtml(v.description || '')}" />
+          </div>
+        `).join('');
+        paramsHtml = fields || '<div class="empty">This tool has no parameters.</div>';
+      }
+
+      content.innerHTML = `
+        <div class="tools-view">
+          <div class="tools-list">
+            <div class="panel-title">Tools (${tab.tools.length})</div>
+            <div class="muted" style="margin-bottom:10px;">Server: <span class="mono">${escapeHtml(sid || 'none')}</span></div>
+            ${toolList || '<div class="empty">No tools found.</div>'}
+          </div>
+          <div class="tool-preview">
+            ${selected ? `<div class="preview-title">${escapeHtml(selected.name)}</div><div class="preview-desc">${escapeHtml(selected.description || 'No description')}</div>` : ''}
+            ${paramsHtml}
+            ${selected ? '<button class="execute-btn" id="executeToolBtn">Execute Tool</button>' : ''}
+            <div class="panel" style="margin-top:12px;">
+              <div class="panel-title">Result</div>
+              <pre class="pre" id="toolResult">-</pre>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.querySelectorAll('.tool-item').forEach(el => {
+        el.addEventListener('click', () => {
+          tab.selectedTool = tab.tools.find(t => t.name === el.dataset.tool) || null;
+          renderTools();
+        });
+      });
+
+      const execBtn = document.getElementById('executeToolBtn');
+      if (execBtn) {
+        execBtn.addEventListener('click', async () => {
+          const sid2 = tab.selectedServerIds[0];
+          if (!sid2 || !tab.selectedTool) return;
+          execBtn.disabled = true;
+          const out = {};
+          document.querySelectorAll('[data-param]').forEach(i => {
+            if (i.value !== '') out[i.dataset.param] = i.value;
+          });
+          try {
+            const data = await fetchJson(`/api/servers/${encodeURIComponent(sid2)}/tools/${encodeURIComponent(tab.selectedTool.name)}/execute`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(out)
+            });
+            document.getElementById('toolResult').textContent = JSON.stringify(data, null, 2);
+          } catch (err) {
+            document.getElementById('toolResult').textContent = `Error: ${err.message}`;
+          }
+          execBtn.disabled = false;
+        });
+      }
+      feather.replace();
+    }
+
+    async function renderResources() {
+      const tab = activeTab();
+      const content = document.getElementById('content');
+      if (!tab) return;
+      const sid = tab.selectedServerIds[0] || state.servers[0]?.id;
+      if (!sid) {
+        content.innerHTML = '<div class="panel" style="margin:16px;"><div class="empty">No server selected.</div></div>';
+        return;
+      }
+      tab.resources = (await fetchJson(`/api/servers/${encodeURIComponent(sid)}/resources`)).resources || [];
+      if (!tab.selectedResource && tab.resources.length) tab.selectedResource = tab.resources[0].uri;
+
+      const list = tab.resources.map(r => `<div class="tool-item ${tab.selectedResource===r.uri?'active':''}" data-uri="${escapeHtml(r.uri)}"><div class="tool-item-name">${escapeHtml(r.name||r.uri)}</div><div class="tool-item-desc">${escapeHtml(r.description||r.uri)}</div></div>`).join('');
+      content.innerHTML = `
+        <div class="tools-view">
+          <div class="tools-list">
+            <div class="panel-title">Resources (${tab.resources.length})</div>
+            ${list || '<div class="empty">No resources exposed by this server.</div>'}
+          </div>
+          <div class="tool-preview">
+            <div class="row" style="margin-bottom:10px;"><button class="btn" id="readResourceBtn">Read Resource</button></div>
+            <div id="resourceResult" class="panel"><div class="empty">Select and read a resource.</div></div>
+          </div>
+        </div>
+      `;
+
+      document.querySelectorAll('[data-uri]').forEach(el => {
+        el.addEventListener('click', () => { tab.selectedResource = el.dataset.uri; renderResources(); });
+      });
+
+      document.getElementById('readResourceBtn').addEventListener('click', async () => {
+        if (!tab.selectedResource) return;
+        const box = document.getElementById('resourceResult');
+        box.innerHTML = '<div class="muted">Loading...</div>';
+        try {
+          const data = await fetchJson(`/api/servers/${encodeURIComponent(sid)}/resources/read`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ uri: tab.selectedResource })
+          });
+          const contents = data.contents || [];
+          const htmlItem = contents.find(c => ((c.mimeType || c.mime_type || '').toLowerCase().includes('text/html')));
+          if (htmlItem) {
+            const html = typeof htmlItem.text === 'string' ? htmlItem.text : decodeBase64ToUtf8(htmlItem.blob || '');
+            const bridged = injectInspectorBridge(html, sid);
+            box.innerHTML = '';
+            const frame = document.createElement('iframe');
+            frame.className = 'iframe';
+            frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+            frame.srcdoc = bridged;
+            box.appendChild(frame);
+            return;
+          }
+          box.innerHTML = `<pre class="pre">${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+        } catch (err) {
+          box.innerHTML = `<div class="badge err">${escapeHtml(err.message)}</div>`;
+        }
+      });
+
+      feather.replace();
+    }
+
+    async function renderPrompts() {
+      const tab = activeTab();
+      const content = document.getElementById('content');
+      if (!tab) return;
+      const sid = tab.selectedServerIds[0] || state.servers[0]?.id;
+      if (!sid) {
+        content.innerHTML = '<div class="panel" style="margin:16px;"><div class="empty">No server selected.</div></div>';
+        return;
+      }
+      tab.prompts = (await fetchJson(`/api/servers/${encodeURIComponent(sid)}/prompts`)).prompts || [];
+      if (!tab.selectedPrompt && tab.prompts.length) tab.selectedPrompt = tab.prompts[0];
+      const list = tab.prompts.map(p => `<div class="tool-item ${tab.selectedPrompt?.name===p.name?'active':''}" data-name="${escapeHtml(p.name)}"><div class="tool-item-name">${escapeHtml(p.name)}</div><div class="tool-item-desc">${escapeHtml(p.description||'No description')}</div></div>`).join('');
+      const args = tab.selectedPrompt?.arguments || [];
+
+      content.innerHTML = `
+        <div class="tools-view">
+          <div class="tools-list">
+            <div class="panel-title">Prompts (${tab.prompts.length})</div>
+            ${list || '<div class="empty">No prompts exposed by this server.</div>'}
+          </div>
+          <div class="tool-preview">
+            <div class="preview-title">${escapeHtml(tab.selectedPrompt?.name || 'Select prompt')}</div>
+            <div class="stack" id="promptArgsWrap">
+              ${args.map(a => `<div class="param-group"><label class="param-label">${escapeHtml(a.name)}</label><input class="param-input" data-arg="${escapeHtml(a.name)}" placeholder="${escapeHtml(a.description || '')}"></div>`).join('')}
+            </div>
+            ${tab.selectedPrompt ? '<button class="execute-btn" id="renderPromptBtn">Render Prompt</button>' : ''}
+            <div class="panel" style="margin-top:12px;"><div class="panel-title">Result</div><pre id="promptResult" class="pre">-</pre></div>
+          </div>
+        </div>
+      `;
+
+      document.querySelectorAll('[data-name]').forEach(el => {
+        el.addEventListener('click', () => {
+          tab.selectedPrompt = tab.prompts.find(p => p.name === el.dataset.name) || null;
+          renderPrompts();
+        });
+      });
+
+      const btn = document.getElementById('renderPromptBtn');
+      if (btn) {
+        btn.addEventListener('click', async () => {
+          const argsData = {};
+          document.querySelectorAll('[data-arg]').forEach(i => argsData[i.dataset.arg] = i.value);
+          try {
+            const data = await fetchJson(`/api/servers/${encodeURIComponent(sid)}/prompts/get`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ prompt_name: tab.selectedPrompt.name, arguments: argsData })
+            });
+            document.getElementById('promptResult').textContent = JSON.stringify(data, null, 2);
+          } catch (err) {
+            document.getElementById('promptResult').textContent = `Error: ${err.message}`;
+          }
+        });
+      }
+      feather.replace();
+    }
+
+    async function renderServers() {
+      const content = document.getElementById('content');
+      const rows = state.servers.map(s => `
+        <div class="panel">
+          <div class="row" style="justify-content:space-between;">
+            <div>
+              <div style="font-weight:600;">${escapeHtml(s.name || s.id)}</div>
+              <div class="muted mono">${escapeHtml(s.url || s.command || '')}</div>
+            </div>
+            <div class="row">
+              <span class="badge ${s.status === 'connected' ? 'ok' : 'err'}">${escapeHtml(s.status)}</span>
+              <button class="btn" data-remove="${escapeHtml(s.id)}">Remove</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+      content.innerHTML = `
+        <div style="padding:16px; overflow:auto;">
+          <div class="panel">
+            <div class="panel-title">Add HTTP MCP Server</div>
+            <div class="stack">
+              <input id="serverName" class="param-input" placeholder="Server name" />
+              <input id="serverUrl" class="param-input" placeholder="http://localhost:8000/mcp" />
+              <div><button id="addServerBtn" class="btn primary">Add Server</button></div>
+            </div>
+          </div>
+          ${rows || '<div class="empty">No servers connected.</div>'}
+        </div>
+      `;
+
+      document.getElementById('addServerBtn').addEventListener('click', async () => {
+        const name = document.getElementById('serverName').value.trim();
+        const url = document.getElementById('serverUrl').value.trim();
+        if (!url) return;
+        try {
+          const id = (name || `server_${Date.now()}`).toLowerCase().replace(/\s+/g, '_');
+          await fetchJson('/api/servers/add', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'http', id, name: name || id, url })
+          });
+          await refreshServers();
+          render();
+        } catch (err) {
+          alert(`Failed to add server: ${err.message}`);
+        }
+      });
+
+      document.querySelectorAll('[data-remove]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          try {
+            await fetchJson(`/api/servers/${encodeURIComponent(btn.dataset.remove)}`, { method: 'DELETE' });
+            await refreshServers();
+            render();
+          } catch (err) {
+            alert(`Failed to remove server: ${err.message}`);
+          }
+        });
+      });
+      feather.replace();
+    }
+
+    async function renderMonitoring() {
+      const content = document.getElementById('content');
+      let metrics = {};
+      let logs = [];
+      try { metrics = await fetchJson('/api/metrics'); } catch {}
+      try { logs = (await fetchJson('/api/logs?limit=40')).logs || []; } catch {}
+      content.innerHTML = `
+        <div style="padding:16px; overflow:auto;">
+          <div class="split-2">
+            <div class="panel"><div class="muted">Total Calls</div><div style="font-size:22px;font-weight:700;">${metrics.total_calls || 0}</div></div>
+            <div class="panel"><div class="muted">Success Rate</div><div style="font-size:22px;font-weight:700;">${Number(metrics.success_rate || 0).toFixed(1)}%</div></div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">Recent Logs</div>
+            ${logs.length ? `<pre class="pre">${escapeHtml(JSON.stringify(logs, null, 2))}</pre>` : '<div class="empty">No logs yet.</div>'}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderSettings() {
+      const content = document.getElementById('content');
+      const inspectorApiKey = getInspectorApiKey();
+      const openaiApiKey = getOpenAiApiKey();
+      const anthropicApiKey = getAnthropicApiKey();
+      content.innerHTML = `
+        <div style="padding:16px; overflow:auto;">
+          <div class="panel">
+            <div class="panel-title">Inspector Settings</div>
+            <div class="stack">
+              <div class="muted">Keys are stored only in your browser localStorage for this Inspector UI.</div>
+              <label class="param-label">Inspector API key (secure mode)</label>
+              <input id="apiKeyInput" class="param-input" value="${escapeHtml(inspectorApiKey)}" placeholder="Inspector API key" />
+              <label class="param-label">OpenAI API key</label>
+              <input id="openaiApiKeyInput" class="param-input" type="password" value="${escapeHtml(openaiApiKey)}" placeholder="sk-..." />
+              <label class="param-label">Claude (Anthropic) API key</label>
+              <input id="anthropicApiKeyInput" class="param-input" type="password" value="${escapeHtml(anthropicApiKey)}" placeholder="sk-ant-..." />
+              <div class="row">
+                <button id="saveApiKey" class="btn primary">Save Keys</button>
+                <button id="clearApiKey" class="btn">Clear LLM Keys</button>
+              </div>
+              <div class="muted">URL query support: <span class="mono">?api_key=...</span>, <span class="mono">?openai_api_key=...</span>, <span class="mono">?anthropic_api_key=...</span></div>
+            </div>
+          </div>
+        </div>
+      `;
+      document.getElementById('saveApiKey').addEventListener('click', () => {
+        const inspectorKey = document.getElementById('apiKeyInput').value.trim();
+        const openaiKey = document.getElementById('openaiApiKeyInput').value.trim();
+        const anthropicKey = document.getElementById('anthropicApiKeyInput').value.trim();
+        localStorage.setItem('polymcp_inspector_api_key', inspectorKey);
+        if (openaiKey) localStorage.setItem('polymcp_inspector_openai_api_key', openaiKey);
+        else localStorage.removeItem('polymcp_inspector_openai_api_key');
+        if (anthropicKey) localStorage.setItem('polymcp_inspector_anthropic_api_key', anthropicKey);
+        else localStorage.removeItem('polymcp_inspector_anthropic_api_key');
+        location.reload();
+      });
+      document.getElementById('clearApiKey').addEventListener('click', () => {
+        localStorage.removeItem('polymcp_inspector_openai_api_key');
+        localStorage.removeItem('polymcp_inspector_anthropic_api_key');
+        location.reload();
+      });
+    }
+
+    async function render() {
+      const content = document.getElementById('content');
+      const activeView = getActiveView();
+      content.classList.toggle('chat-mode', activeView === 'chat');
+      renderTabs();
+      renderNav();
+      if (activeView === 'chat') return renderChat();
+      if (activeView === 'tools') return renderTools();
+      if (activeView === 'resources') return renderResources();
+      if (activeView === 'prompts') return renderPrompts();
+      if (activeView === 'servers') return renderServers();
+      if (activeView === 'monitoring') return renderMonitoring();
+      if (activeView === 'settings') return renderSettings();
+    }
+
+    async function refreshServers() {
+      try {
+        const data = await fetchJson('/api/servers');
+        state.servers = data.servers || [];
+        state.tabs.forEach(t => {
+          t.selectedServerIds = t.selectedServerIds.filter(id => state.servers.some(s => s.id === id));
+          if (!t.selectedServerIds.length && state.servers.length) t.selectedServerIds = [state.servers[0].id];
+        });
+        saveState();
+      } catch {
+        state.servers = [];
+      }
+    }
+
+    function setupEvents() {
+      const sidebar = document.getElementById('sidebar');
+      document.getElementById('collapseBtn').addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+        setTimeout(() => feather.replace(), 200);
+      });
+      document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', () => setView(item.dataset.view));
+      });
+      window.addEventListener('beforeunload', () => saveState());
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') saveState();
+      });
+    }
+
+    async function init() {
+      setupEvents();
+      await refreshServers();
+      const restored = await restoreState();
+      if (!restored) {
+        const first = createTab('Project 1');
+        if (state.servers.length) first.selectedServerIds = [state.servers[0].id];
+        state.tabs = [first];
+        state.activeTabId = first.id;
+      }
+      await render();
+      saveState();
+      feather.replace();
+      setInterval(async () => {
+        await refreshServers();
+        if (getActiveView() === 'monitoring') renderMonitoring();
+      }, 5000);
+    }
+
+    init();
+  </script>
+</body>
+</html>
